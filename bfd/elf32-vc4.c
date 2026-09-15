@@ -512,6 +512,10 @@ vc4_final_link_relocate (reloc_howto_type *howto,
   if (howto->pc_relative)
     s -= pc;
 
+  /* VC4 addresses are 32 bits: wrap, or a target at 0x80000000 and up (whose
+     ELF32 addend reads back negative) looks out of range from anywhere.  */
+  s = ((s & 0xffffffff) ^ 0x80000000) - 0x80000000;
+
   u = (unsigned long) s;
 
   switch (howto->type)

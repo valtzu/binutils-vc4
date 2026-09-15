@@ -450,7 +450,8 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 
   /* Undefined symbols can't be relaxed by the assembler, and should use the
      biggest insn type available (until they can be relaxed by the linker).  */
-  if (S_GET_SEGMENT (fragP->fr_symbol) != segment
+  if (fragP->fr_symbol == NULL
+      || S_GET_SEGMENT (fragP->fr_symbol) != segment
       || S_IS_EXTERNAL (fragP->fr_symbol)
       || S_IS_WEAK (fragP->fr_symbol))
     {
@@ -867,18 +868,28 @@ md_convert_frag (bfd *headers ATTRIBUTE_UNUSED, segT seg, fragS *fragP)
       && fragP->fr_subtype != SWITCH_TBH
       && fragP->fr_subtype != CASE_TBB
       && fragP->fr_subtype != CASE_TBH
-      && (S_GET_SEGMENT (fragP->fr_symbol) != seg
+      && (fragP->fr_symbol == NULL
+	  || S_GET_SEGMENT (fragP->fr_symbol) != seg
 	  || S_IS_EXTERNAL (fragP->fr_symbol)
 	  || S_IS_WEAK (fragP->fr_symbol)))
     {
       gas_assert (fragP->fr_cgen.insn != 0);
 
-      gas_cgen_record_fixup (fragP, where, fragP->fr_cgen.insn,
+      fixS *fixP = gas_cgen_record_fixup (fragP, where, fragP->fr_cgen.insn,
 			     (fragP->fr_fix - where) * 8,
 			     cgen_operand_lookup_by_num (gas_cgen_cpu_desc,
 							 operand),
 			     fragP->fr_cgen.opinfo, fragP->fr_symbol,
 			     fragP->fr_offset);
+
+
+      /* An absolute target: the displacement is only known at link time,
+
+         and the linker checks its range.  */
+
+      if (fragP->fr_symbol == NULL)
+
+        fixP->fx_no_overflow = 1;
     }
   else
     /* A relaxable insn, but all bets are off when the relaxation machinery is

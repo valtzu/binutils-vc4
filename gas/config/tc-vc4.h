@@ -55,6 +55,10 @@ extern void vc4_start_line_hook (void);
 /* Values passed to md_apply_fix don't include the symbol value.  */
 #define MD_APPLY_SYM_VALUE(FIX) 0
 
+/* `bl 0x80000200`: a number as a pc-relative operand is an absolute target,
+   left to a reloc (see gas/cgen.c).  */
+#define TC_CGEN_PCREL_CONSTANT_RELOC 1
+
 #define ALUOP_16BIT        1
 #define ALUOP_32BIT        2
 #define ALUOP_48BIT        3

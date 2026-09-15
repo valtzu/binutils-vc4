@@ -398,6 +398,15 @@ gas_cgen_parse_operand (CGEN_CPU_DESC cd ATTRIBUTE_UNUSED,
     case O_constant:
       if (want == CGEN_PARSE_OPERAND_SYMBOLIC)
 	goto de_fault;
+#ifdef TC_CGEN_PCREL_CONSTANT_RELOC
+      /* A number given for a pc-relative operand is the target address, and
+	 the insn's own address is only known at link time: leave it to a
+	 reloc instead of encoding it as if the insn were at 0.  */
+      if (want == CGEN_PARSE_OPERAND_ADDRESS
+	  && CGEN_OPERAND_ATTR_VALUE (cgen_operand_lookup_by_num (cd, opindex),
+				      CGEN_OPERAND_PCREL_ADDR))
+	goto de_fault;
+#endif
       *valueP = exp.X_add_number;
       *resultP = CGEN_PARSE_OPERAND_RESULT_NUMBER;
       break;
