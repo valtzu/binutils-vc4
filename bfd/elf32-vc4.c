@@ -468,16 +468,23 @@ vc4_reloc_name_lookup (bfd *abfd ATTRIBUTE_UNUSED,
 
 /* Set the howto pointer for an Vc4 ELF reloc.  */
 
-static void
-vc4_info_to_howto_rela (bfd * abfd ATTRIBUTE_UNUSED,
+static bool
+vc4_info_to_howto_rela (bfd * abfd,
 			arelent * cache_ptr,
 			Elf_Internal_Rela * dst)
 {
   unsigned int r_type;
 
   r_type = ELF32_R_TYPE (dst->r_info);
-  BFD_ASSERT (r_type < (unsigned int) R_VC4_max);
+  if (r_type >= (unsigned int) R_VC4_max)
+    {
+      _bfd_error_handler (_("%pB: unsupported relocation type %#x"),
+			  abfd, r_type);
+      bfd_set_error (bfd_error_bad_value);
+      return false;
+    }
   cache_ptr->howto = &vc4_elf_howto_table[r_type];
+  return true;
 }
 
 static bfd_reloc_status_type
@@ -606,7 +613,7 @@ vc4_final_link_relocate (reloc_howto_type *howto,
 /* This is based on mep_elf_relocate_section, but RX, M32C, Microblaze,
    IQ2000, MT and RL78 also appear to be derived from the same origin.  */
 
-static bool
+static int
 vc4_elf_relocate_section (bfd *output_bfd,
 			  struct bfd_link_info *info,
 			  bfd *input_bfd,
@@ -741,19 +748,19 @@ vc4_elf_reloc (bfd *abfd ATTRIBUTE_UNUSED,
 static asection *
 vc4_elf_gc_mark_hook (asection *sec,
 		      struct bfd_link_info *info,
-		      Elf_Internal_Rela *rel,
+		      struct elf_reloc_cookie *cookie,
 		      struct elf_link_hash_entry *h,
-		      Elf_Internal_Sym *sym)
+		      unsigned int symndx)
 {
   if (h != NULL)
-    switch (ELF32_R_TYPE (rel->r_info))
+    switch (ELF32_R_TYPE (cookie->rel->r_info))
       {
       case R_VC4_GNU_VTINHERIT:
       case R_VC4_GNU_VTENTRY:
 	return NULL;
       }
 
-  return _bfd_elf_gc_mark_hook (sec, info, rel, h, sym);
+  return _bfd_elf_gc_mark_hook (sec, info, cookie, h, symndx);
 }
 
 /* Look through the relocs for a section during the first phase.
