@@ -1,0 +1,88 @@
+name: Release
+
+# Builds a Debian package of the vc4-elf binutils, installed under /opt/vc4,
+# and publishes it to the rolling `latest` release.
+
+on:
+  push:
+    branches: [vc4-2.46.1]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  deb:
+    runs-on: ubuntu-26.04
+    env:
+      PREFIX: /opt/vc4
+      PACKAGE: vc4-elf-binutils
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: src
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bison flex texinfo dpkg-dev file
+
+      - name: Build
+        run: |
+          mkdir build
+          cd build
+          ../src/configure --target=vc4-elf --prefix="$PREFIX" \
+            --disable-nls --disable-werror --disable-gdb --disable-gdbserver \
+            --disable-sim --disable-gprofng
+          make -j"$(nproc)"
+          make install-strip DESTDIR="$GITHUB_WORKSPACE/pkg"
+
+      - name: Package
+        run: |
+          version="$(sed -n 's/.*BFD_VERSION\], \[\(.*\)\].*/\1/p' src/bfd/version.m4)"
+          version="$version+git$(git -C src log -1 --format=%cd --date=format:%Y%m%d).$(git -C src rev-parse --short=10 HEAD)"
+
+          # Only the host's executables have shared library dependencies; the
+          # target's objects are not for dpkg-shlibdeps to look at.
+          mkdir -p debian
+          touch debian/control
+          elfs="$(find pkg -type f -exec sh -c 'file -b "$1" | grep -q "^ELF.*x86-64"' _ {} \; -print)"
+          depends="$(dpkg-shlibdeps -O $(printf -- '-e%s ' $elfs) | sed -n 's/^shlibs:Depends=//p')"
+
+          mkdir pkg/DEBIAN
+          cat > pkg/DEBIAN/control <<EOF
+          Package: $PACKAGE
+          Version: $version
+          Architecture: $(dpkg --print-architecture)
+          Maintainer: ${{ github.repository_owner }} <${{ github.repository_owner }}@users.noreply.github.com>
+          Depends: $depends
+          Description: GNU binutils for the VideoCore IV (vc4-elf), in $PREFIX
+          EOF
+          cat pkg/DEBIAN/control
+          dpkg-deb --root-owner-group --build pkg "$PACKAGE.deb"
+
+      - name: Publish the latest release
+        run: |
+          gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest" -f sha="$GITHUB_SHA" -F force=true >/dev/null ||
+            gh api "repos/$GH_REPO/git/refs" -f ref=refs/tags/latest -f sha="$GITHUB_SHA" >/dev/null
+
+          cat > notes.md <<EOF
+          Built from $GITHUB_SHA on Ubuntu 26.04, installs into \`$PREFIX\`:
+
+          \`\`\`sh
+          sudo apt-get install ./$PACKAGE.deb
+          \`\`\`
+          EOF
+
+          if gh release view latest >/dev/null 2>&1; then
+            gh release edit latest --title latest --notes-file notes.md
+          else
+            gh release create latest --verify-tag --title latest --notes-file notes.md
+          fi
+          gh release upload latest "$PACKAGE.deb" --clobber
