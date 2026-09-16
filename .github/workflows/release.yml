@@ -45,6 +45,10 @@ jobs:
 
       - name: Package
         run: |
+          # The info directory index is shared by both vc4-elf packages, so
+          # neither may ship it.
+          rm -f "pkg$PREFIX/share/info/dir"
+
           version="$(sed -n 's/.*BFD_VERSION\], \[\(.*\)\].*/\1/p' src/bfd/version.m4)"
           version="$version+git$(git -C src log -1 --format=%cd --date=format:%Y%m%d).$(git -C src rev-parse --short=10 HEAD)"
 
